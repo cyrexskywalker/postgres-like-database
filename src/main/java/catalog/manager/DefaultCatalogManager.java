@@ -134,6 +134,20 @@ public class DefaultCatalogManager implements CatalogManager {
         return out;
     }
 
+    @Override
+    public synchronized TypeDefinition getTypeByName(String resultType) {
+        if (resultType == null || resultType.isBlank()) {
+            throw new IllegalArgumentException("type name is empty");
+        }
+
+        TypeDefinition type = typesByName.get(resultType);
+        if (type == null) {
+            throw new IllegalArgumentException("unknown type: " + resultType);
+        }
+
+        return type;
+    }
+
     private void ensureCatalogFiles() throws IOException {
         for (String f : List.of(TABLES_FILE, COLUMNS_FILE, TYPES_FILE)) {
             Path p = root.resolve(f);
@@ -145,10 +159,10 @@ public class DefaultCatalogManager implements CatalogManager {
         TypeDefinition int64 = new TypeDefinition(nextTypeOid.getAndIncrement(), "INT64", 8);
         TypeDefinition varchar255 = new TypeDefinition(nextTypeOid.getAndIncrement(), "VARCHAR_255", -1);
 
-        typesByOid.put(int64.oid(), int64);
+        typesByOid.put(int64.getOid(), int64);
         typesByName.put(int64.name(), int64);
 
-        typesByOid.put(varchar255.oid(), varchar255);
+        typesByOid.put(varchar255.getOid(), varchar255);
         typesByName.put(varchar255.name(), varchar255);
     }
 
@@ -205,9 +219,9 @@ public class DefaultCatalogManager implements CatalogManager {
                     }
                     case TYPE -> {
                         TypeDefinition ty = TypeDefinition.fromBytes(rec);
-                        typesByOid.put(ty.oid(), ty);
+                        typesByOid.put(ty.getOid(), ty);
                         typesByName.put(ty.name(), ty);
-                        if (ty.oid() > maxType) maxType = ty.oid();
+                        if (ty.getOid() > maxType) maxType = ty.getOid();
                     }
                 }
             }

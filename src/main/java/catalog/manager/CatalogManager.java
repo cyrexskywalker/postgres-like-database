@@ -2,6 +2,7 @@ package catalog.manager;
 
 import catalog.model.ColumnDefinition;
 import catalog.model.TableDefinition;
+import catalog.model.TypeDefinition;
 
 import java.util.List;
 
@@ -15,4 +16,5 @@ public interface CatalogManager {
 
     List<TableDefinition> listTables();
 
+    TypeDefinition getTypeByName(String resultType);
 }

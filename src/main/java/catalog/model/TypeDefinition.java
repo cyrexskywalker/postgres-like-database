@@ -13,7 +13,7 @@ public class TypeDefinition {
 
     public TypeDefinition(int oid, String name, int byteLength) {
         this.oid = oid;
-        this.name = Objects.requireNonNull(name, "name");
+        this.name = Objects.requireNonNull(name, "getName");
         this.byteLength = byteLength;
     }
 
@@ -35,7 +35,7 @@ public class TypeDefinition {
         byte[] n = utf8(name);
 
         int size = 4           // getOid
-                + 2 + n.length // name
+                + 2 + n.length // getName
                 + 4;           // byteLength
 
         ByteBuffer bb = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);

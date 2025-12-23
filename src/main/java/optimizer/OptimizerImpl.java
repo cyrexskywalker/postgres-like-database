@@ -1,11 +1,9 @@
 package optimizer;
 
-import ast.RangeTblEntry;
-import ast.TargetEntry;
 import catalog.manager.CatalogManager;
-import catalog.model.TableDefinition;
 import optimizer.node.*;
 import planner.node.*;
+import semantic.QueryTree;
 
 import java.util.List;
 
@@ -19,18 +17,20 @@ public class OptimizerImpl implements Optimizer {
 
     @Override
     public PhysicalPlanNode optimize(LogicalPlanNode logicalPlan) {
+
         if (logicalPlan instanceof CreateTableNode ln) {
             return new PhysicalCreateNode(ln.getTableDefinition());
         }
 
         if (logicalPlan instanceof InsertNode ln) {
-            return new PhysicalInsertNode(ln.getTableDefinition(), ln.getValues());
+            return new PhysicalInsertNode(
+                    ln.getTableDefinition(),
+                    ln.getValues()
+            );
         }
 
         if (logicalPlan instanceof ScanNode ln) {
-            RangeTblEntry rte = ln.getTable();
-            TableDefinition table = catalog.getTable(rte.tableName);
-            return new PhysicalSeqScanNode(table);
+            return new PhysicalSeqScanNode(ln.getTable());
         }
 
         if (logicalPlan instanceof FilterNode ln) {
@@ -40,12 +40,12 @@ public class OptimizerImpl implements Optimizer {
 
         if (logicalPlan instanceof ProjectNode ln) {
             PhysicalPlanNode child = optimize(ln.getInput());
-            List<TargetEntry> targets = ln.getTargets();
-            return new PhysicalProjectNode(child, targets);
+            return new PhysicalProjectNode(child, ln.getTargets());
         }
 
         throw new UnsupportedOperationException(
-                "Unsupported logical node type: " + logicalPlan.getClass().getSimpleName()
+                "Unsupported logical node type: " +
+                        logicalPlan.getClass().getSimpleName()
         );
     }
 }

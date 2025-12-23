@@ -1,7 +1,7 @@
 package planner.node;
 
-import ast.Expr;
 import catalog.model.TableDefinition;
+import semantic.QueryTree;
 
 import java.util.List;
 
@@ -12,9 +12,9 @@ import java.util.List;
 public class InsertNode extends LogicalPlanNode {
 
     private final TableDefinition tableDefinition;
-    private final List<Expr> values;  // Expr вместо Object
+    private final List<QueryTree.QTExpr> values;
 
-    public InsertNode(TableDefinition tableDefinition, List<Expr> values) {
+    public InsertNode(TableDefinition tableDefinition, List<QueryTree.QTExpr> values) {
         super("Insert");
         this.tableDefinition = tableDefinition;
         this.values = values;
@@ -25,7 +25,7 @@ public class InsertNode extends LogicalPlanNode {
         return tableDefinition;
     }
 
-    public List<Expr> getValues() {
+    public List<QueryTree.QTExpr> getValues() {
         return values;
     }
 

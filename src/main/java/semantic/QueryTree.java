@@ -1,5 +1,6 @@
 package semantic;
 
+import ast.QueryType;
 import catalog.model.ColumnDefinition;
 import catalog.model.TableDefinition;
 
@@ -12,6 +13,7 @@ public class QueryTree {
     public final List<TableDefinition> fromTables;
     public final List<QTExpr> targetList;
     public final QTExpr filter;
+    public QueryType commandType;
 
     public QueryTree(List<TableDefinition> fromTables,
                      List<QTExpr> targetList,
@@ -44,7 +46,7 @@ public class QueryTree {
 
         @Override
         public String toString() {
-            return "Column(" + table.name() + "." + column.name() + ":" + type + ")";
+            return "Column(" + table.getName() + "." + column.name() + ":" + type + ")";
         }
     }
 
@@ -103,7 +105,7 @@ public class QueryTree {
         StringBuilder sb = new StringBuilder("QueryTree\n");
         sb.append("  fromTables:\n");
         for (TableDefinition t : fromTables) {
-            sb.append("    ").append(t.name()).append("\n");
+            sb.append("    ").append(t.getName()).append("\n");
         }
         sb.append("  targetList:\n");
         for (QTExpr e : targetList) {

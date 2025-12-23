@@ -1,5 +1,7 @@
 package catalog.operation;
 
+import index.TID;
+
 import java.util.List;
 
 public interface OperationManager {
@@ -8,4 +10,5 @@ public interface OperationManager {
 
     List<Object> select(String tableName, List<String> columnNames);
 
+    Object selectByTid(String tableName, TID tid);
 }

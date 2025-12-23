@@ -1,8 +1,7 @@
 package optimizer.node;
 
-
-import ast.Expr;
 import catalog.model.TableDefinition;
+import semantic.QueryTree;
 
 import java.util.List;
 
@@ -13,9 +12,9 @@ import java.util.List;
 public class PhysicalInsertNode extends PhysicalPlanNode {
 
     private final TableDefinition tableDefinition;
-    private final List<Expr> values;
+    private final List<QueryTree.QTExpr> values;
 
-    public PhysicalInsertNode(TableDefinition tableDefinition, List<Expr> values) {
+    public PhysicalInsertNode(TableDefinition tableDefinition, List<QueryTree.QTExpr> values) {
         super("PhysicalInsert");
         this.tableDefinition = tableDefinition;
         this.values = values;
@@ -25,7 +24,7 @@ public class PhysicalInsertNode extends PhysicalPlanNode {
         return tableDefinition;
     }
 
-    public List<Expr> getValues() {
+    public List<QueryTree.QTExpr> getValues() {
         return values;
     }
 

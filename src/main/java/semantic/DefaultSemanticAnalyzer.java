@@ -46,7 +46,7 @@ public class DefaultSemanticAnalyzer implements SemanticAnalyzer {
             if (td == null) {
                 throw new SemanticException("Unknown table: " + rel);
             }
-            String alias = (rv.alias != null && !rv.alias.isBlank()) ? rv.alias : td.name();
+            String alias = (rv.alias != null && !rv.alias.isBlank()) ? rv.alias : td.getName();
             if (aliasToTable.containsKey(alias)) {
                 throw new SemanticException("Duplicate table alias: " + alias);
             }
@@ -108,7 +108,7 @@ public class DefaultSemanticAnalyzer implements SemanticAnalyzer {
         String tableAlias = cr.table;
         String colName = cr.column;
         if (colName == null || colName.isBlank()) {
-            throw new SemanticException("empty column name");
+            throw new SemanticException("empty column getName");
         }
         if (tableAlias != null && !tableAlias.isBlank()) {
             TableDefinition td = fromCtx.aliasToTable.get(tableAlias);
@@ -138,7 +138,7 @@ public class DefaultSemanticAnalyzer implements SemanticAnalyzer {
     private ColumnDefinition findColumnInTable(CatalogManager catalog, TableDefinition td, String colName) {
         ColumnDefinition cd = findColumnInTableOrNull(catalog, td, colName);
         if (cd == null) {
-            throw new SemanticException("column " + colName + " not found in table " + td.name());
+            throw new SemanticException("column " + colName + " not found in table " + td.getName());
         }
         return cd;
     }

@@ -26,7 +26,7 @@ public class TableDefinition {
 
     public TableDefinition(int oid, String name, String type, String fileNode, int pagesCount) {
         this.oid = oid;
-        this.name = Objects.requireNonNull(name, "name");
+        this.name = Objects.requireNonNull(name, "getName");
         this.type = Objects.requireNonNull(type, "type");
         this.fileNode = Objects.requireNonNull(fileNode, "fileNode");
         this.pagesCount = pagesCount;
@@ -34,11 +34,11 @@ public class TableDefinition {
 
     // ======= GETTERS / SETTERS =======
 
-    public int oid() {
+    public int getOid() {
         return oid;
     }
 
-    public String name() {
+    public String getName() {
         return name;
     }
 

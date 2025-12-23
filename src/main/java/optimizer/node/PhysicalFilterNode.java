@@ -1,12 +1,13 @@
 package optimizer.node;
 
-import ast.Expr;
+import semantic.QueryTree;
 
 public class PhysicalFilterNode extends PhysicalPlanNode {
-    private final PhysicalPlanNode input;
-    private final Expr predicate;
 
-    public PhysicalFilterNode(PhysicalPlanNode input, Expr predicate) {
+    private final PhysicalPlanNode input;
+    private final QueryTree.QTExpr predicate;
+
+    public PhysicalFilterNode(PhysicalPlanNode input, QueryTree.QTExpr predicate) {
         super("PhysicalFilter");
         this.input = input;
         this.predicate = predicate;
@@ -16,15 +17,13 @@ public class PhysicalFilterNode extends PhysicalPlanNode {
         return input;
     }
 
-    public Expr getPredicate() {
+    public QueryTree.QTExpr getPredicate() {
         return predicate;
     }
 
     @Override
     public String prettyPrint(String indent) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(indent).append("PhysicalFilter(").append(predicate).append(")\n");
-        sb.append(input.prettyPrint(indent + "  "));
-        return sb.toString();
+        return indent + "PhysicalFilter(" + predicate + ")\n"
+                + input.prettyPrint(indent + "  ");
     }
 }

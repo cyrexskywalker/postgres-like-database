@@ -1,7 +1,7 @@
 package planner;
 
-import ast.QueryTree;
 import planner.node.LogicalPlanNode;
+import semantic.QueryTree;
 
 public interface Planner {
     // Преобразование высокоуровневых элементов запроса (rangeTable, targetList, where)

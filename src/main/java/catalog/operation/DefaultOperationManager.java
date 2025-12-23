@@ -4,6 +4,7 @@ import catalog.manager.CatalogManager;
 import catalog.model.ColumnDefinition;
 import catalog.model.TableDefinition;
 import catalog.model.TypeDefinition;
+import index.TID;
 import memory.buffer.BufferPoolManager;
 import memory.model.BufferSlot;
 import memory.page.HeapPage;
@@ -67,7 +68,6 @@ public class DefaultOperationManager implements OperationManager {
                 bpm.flushPage(pid);
                 return;
             } catch (IllegalArgumentException ignored) {
-                // страница переполнена, пробуем следующую
             }
         }
 
@@ -77,7 +77,7 @@ public class DefaultOperationManager implements OperationManager {
         bpm.updatePage(pages, np);
         bpm.flushPage(pages);
 
-        catalogAccess.updatePagesCount(td.oid(), pages + 1);
+        catalogAccess.updatePagesCount(td.getOid(), pages + 1);
     }
 
     @Override
@@ -99,16 +99,45 @@ public class DefaultOperationManager implements OperationManager {
 
             for (int i = 0; i < p.size(); i++) {
                 byte[] tuple = p.read(i);
-                Map<String, Object> rowMap =
-                        deserializeRowToMap(allCols, tuple);
 
+                Map<String, Object> fullRow = deserializeRowToMap(allCols, tuple);
+
+                Map<String, Object> projected = new LinkedHashMap<>();
                 for (ColumnDefinition c : needCols) {
-                    out.add(rowMap.get(c.name()));
+                    projected.put(c.name(), fullRow.get(c.name()));
                 }
+
+                out.add(projected);
             }
         }
 
         return out;
+    }
+
+
+    @Override
+    public Object selectByTid(String tableName, TID tid) {
+        if (tid == null) throw new IllegalArgumentException("tid is null");
+
+        TableDefinition td = requireTable(tableName);
+        List<ColumnDefinition> allCols = catalogAccess.listColumnsSorted(td);
+
+        int pageId = tid.pageId();
+        int slotId = tid.slotId();
+
+        if (pageId < 0 || pageId >= td.pagesCount()) {
+            return null;
+        }
+
+        BufferSlot slot = bpm.getPage(pageId);
+        Page p = slot.getPage();
+
+        if (slotId < 0 || slotId >= p.size()) {
+            return null;
+        }
+
+        byte[] tuple = p.read(slotId);
+        return deserializeRowToMap(allCols, tuple);
     }
 
     private TableDefinition requireTable(String name) {

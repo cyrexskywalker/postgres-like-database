@@ -18,7 +18,7 @@ public class ColumnDefinition {
         this.oid = oid;
         this.tableOid = tableOid;
         this.typeOid = typeOid;
-        this.name = Objects.requireNonNull(name, "name");
+        this.name = Objects.requireNonNull(name, "getName");
         this.position = position;
     }
 
@@ -27,7 +27,7 @@ public class ColumnDefinition {
         this.oid = 0;
         this.tableOid = 0;
         this.typeOid = typeOid;
-        this.name = Objects.requireNonNull(name, "name");
+        this.name = Objects.requireNonNull(name, "getName");
         this.position = position;
     }
 
@@ -61,7 +61,7 @@ public class ColumnDefinition {
         int size = 4           // getOid
                 + 4            // tableOid
                 + 4            // typeOid
-                + 2 + n.length // name
+                + 2 + n.length // getName
                 + 4;           // position
 
         ByteBuffer bb = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);

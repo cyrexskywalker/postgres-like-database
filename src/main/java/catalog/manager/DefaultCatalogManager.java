@@ -3,6 +3,7 @@ package catalog.manager;
 import catalog.model.ColumnDefinition;
 import catalog.model.TableDefinition;
 import catalog.model.TypeDefinition;
+import catalog.operation.DefaultOperationManager;
 import memory.buffer.BufferPoolManager;
 import memory.model.BufferSlot;
 import memory.page.HeapPage;
@@ -15,7 +16,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-public class DefaultCatalogManager implements CatalogManager {
+public class DefaultCatalogManager implements CatalogManager, DefaultOperationManager.CatalogAccess {
 
     final int PAGE_SIZE = 8192;
     private enum Kind { TABLE, COLUMN, TYPE }
@@ -57,7 +58,7 @@ public class DefaultCatalogManager implements CatalogManager {
     @Override
     public synchronized TableDefinition createTable(String name, List<ColumnDefinition> columns) {
         if (name == null || name.isBlank())
-            throw new IllegalArgumentException("table name is empty");
+            throw new IllegalArgumentException("table getName is empty");
         if (tablesByName.containsKey(name))
             throw new IllegalArgumentException("table already exists: " + name);
         Objects.requireNonNull(columns, "columns");
@@ -103,10 +104,10 @@ public class DefaultCatalogManager implements CatalogManager {
             throw new RuntimeException("failed to create data file: " + dataFile, e);
         }
 
-        tablesByOid.put(td.oid(), td);
-        tablesByName.put(td.name(), td);
+        tablesByOid.put(td.getOid(), td);
+        tablesByName.put(td.getName(), td);
         cols.sort(Comparator.comparingInt(ColumnDefinition::position));
-        columnsByTableOid.put(td.oid(), cols);
+        columnsByTableOid.put(td.getOid(), cols);
 
         return td;
     }
@@ -120,24 +121,24 @@ public class DefaultCatalogManager implements CatalogManager {
 
     @Override
     public synchronized ColumnDefinition getColumn(TableDefinition table, String columnName) {
-        List<ColumnDefinition> cols = columnsByTableOid.getOrDefault(table.oid(), List.of());
+        List<ColumnDefinition> cols = columnsByTableOid.getOrDefault(table.getOid(), List.of());
         for (ColumnDefinition c : cols) {
             if (c.name().equals(columnName)) return c;
         }
-        throw new IllegalArgumentException("no such column: " + columnName + " in table " + table.name());
+        throw new IllegalArgumentException("no such column: " + columnName + " in table " + table.getName());
     }
 
     @Override
     public synchronized List<TableDefinition> listTables() {
         List<TableDefinition> out = new ArrayList<>(tablesByOid.values());
-        out.sort(Comparator.comparing(TableDefinition::oid));
+        out.sort(Comparator.comparing(TableDefinition::getOid));
         return out;
     }
 
     @Override
     public synchronized TypeDefinition getTypeByName(String resultType) {
         if (resultType == null || resultType.isBlank()) {
-            throw new IllegalArgumentException("type name is empty");
+            throw new IllegalArgumentException("type getName is empty");
         }
 
         TypeDefinition type = typesByName.get(resultType);
@@ -206,9 +207,9 @@ public class DefaultCatalogManager implements CatalogManager {
                 switch (kind) {
                     case TABLE -> {
                         TableDefinition td = TableDefinition.fromBytes(rec);
-                        tablesByOid.put(td.oid(), td);
-                        tablesByName.put(td.name(), td);
-                        if (td.oid() > maxTable) maxTable = td.oid();
+                        tablesByOid.put(td.getOid(), td);
+                        tablesByName.put(td.getName(), td);
+                        if (td.getOid() > maxTable) maxTable = td.getOid();
                     }
                     case COLUMN -> {
                         ColumnDefinition cd = ColumnDefinition.fromBytes(rec);
@@ -304,5 +305,40 @@ public class DefaultCatalogManager implements CatalogManager {
         } catch (IllegalArgumentException ex) {
             return false;
         }
+    }
+
+    @Override
+    public List<ColumnDefinition> listColumnsSorted(TableDefinition table) {
+        List<ColumnDefinition> cols =
+                columnsByTableOid.getOrDefault(table.getOid(), List.of());
+        return cols;
+    }
+
+    @Override
+    public TypeDefinition getTypeByOid(int typeOid) {
+        TypeDefinition t = typesByOid.get(typeOid);
+        if (t == null) {
+            throw new IllegalArgumentException("Unknown type oid: " + typeOid);
+        }
+        return t;
+    }
+
+    @Override
+    public void updatePagesCount(int tableOid, int newPagesCount) {
+        TableDefinition old = tablesByOid.get(tableOid);
+        if (old == null) {
+            throw new IllegalArgumentException("No table with oid " + tableOid);
+        }
+
+        TableDefinition updated = new TableDefinition(
+                old.getOid(),
+                old.getName(),
+                old.type(),
+                old.fileNode(),
+                newPagesCount
+        );
+
+        tablesByOid.put(tableOid, updated);
+        tablesByName.put(updated.getName(), updated);
     }
 }

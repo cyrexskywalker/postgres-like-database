@@ -52,7 +52,7 @@ public class DefaultParser implements Parser {
     }
 
     private RangeVar parseRangeVar() {
-        Token name = expect(TokenType.IDENT, "expected table name");
+        Token name = expect(TokenType.IDENT, "expected table getName");
         String alias = null;
         if (match(TokenType.AS)) {
             alias = expect(TokenType.IDENT, "expected table alias").getLexeme();

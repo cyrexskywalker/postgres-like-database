@@ -1,12 +1,12 @@
 package planner.node;
 
-import ast.Expr;
+import semantic.QueryTree;
 
 public class FilterNode extends LogicalPlanNode {
     private final LogicalPlanNode input;
-    private final Expr predicate;
+    private final QueryTree.QTExpr predicate;
 
-    public FilterNode(LogicalPlanNode input, Expr predicate) {
+    public FilterNode(LogicalPlanNode input, QueryTree.QTExpr predicate) {
         super("Filter");
         this.input = input;
         this.predicate = predicate;
@@ -17,7 +17,7 @@ public class FilterNode extends LogicalPlanNode {
         return input;
     }
 
-    public Expr getPredicate() {
+    public QueryTree.QTExpr getPredicate() {
         return predicate;
     }
 

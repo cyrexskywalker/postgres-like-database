@@ -1,24 +1,24 @@
 package execution.executors;
 
-
-import ast.AConst;
-import ast.Expr;
 import catalog.model.TableDefinition;
 import catalog.operation.OperationManager;
+import semantic.QueryTree;
 
 import java.util.List;
 
 /**
- * Исполнитель для операции INSERT INTO table VALUES (...).
- * Получает объект Table и конкретные значения.
+ * Исполнитель INSERT INTO table VALUES (...).
+ * Работает с SEMANTIC QueryTree, а не с AST.
  */
 public class InsertExecutor implements Executor {
 
     private final OperationManager operationManager;
     private final TableDefinition tableDefinition;
-    private final List<Expr> values;
+    private final List<QueryTree.QTExpr> values;
 
-    public InsertExecutor(OperationManager operationManager, TableDefinition tableDefinition, List<Expr> values) {
+    public InsertExecutor(OperationManager operationManager,
+                          TableDefinition tableDefinition,
+                          List<QueryTree.QTExpr> values) {
         this.operationManager = operationManager;
         this.tableDefinition = tableDefinition;
         this.values = values;
@@ -29,17 +29,23 @@ public class InsertExecutor implements Executor {
 
     @Override
     public Object next() {
-        // Преобразуем Expr в Object (предполагаем AConst)
         List<Object> rowValues = values.stream()
-                .map(expr -> ((AConst) expr).value)
+                .map(this::evalValue)
                 .toList();
 
-        // Используем новый метод insert(OperationManager)
         operationManager.insert(tableDefinition.getName(), rowValues);
-
         return null;
     }
 
     @Override
     public void close() { }
+
+    private Object evalValue(QueryTree.QTExpr expr) {
+        if (expr instanceof QueryTree.QTConst c) {
+            return c.value;
+        }
+        throw new IllegalStateException(
+                "INSERT supports only constant values, got: " + expr
+        );
+    }
 }

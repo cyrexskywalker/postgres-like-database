@@ -1,6 +1,6 @@
 package memory.replacer;
 
-import ru.open.cu.student.memory.model.BufferSlot;
+import memory.model.BufferSlot;
 
 public interface Replacer {
     void push(BufferSlot bufferSlot);

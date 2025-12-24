@@ -54,28 +54,31 @@ public class HeapPageFileManager implements PageFileManager {
 
     @Override
     public Page read(int pageId, Path path) {
-        if (pageId < 0) {
-            throw new IllegalArgumentException("invalid page id");
-        }
-        if (!Files.exists(path)) {
-            throw new IllegalArgumentException("page file does not exist");
-        }
+        if (pageId < 0) throw new IllegalArgumentException("invalid page id");
 
-        try (FileChannel ch = FileChannel.open(path, StandardOpenOption.READ)) {
-            ByteBuffer buf = ByteBuffer.allocate(PAGE_SIZE);
-            long pos = (long) pageId * PAGE_SIZE;
-
-            int total = 0;
-            while (total < PAGE_SIZE) {
-                int n = ch.read(buf, pos + total);
-                if (n == -1) {
-                    throw new IllegalArgumentException("page out of file (EOF)");
-                }
-                total += n;
+        try {
+            if (!Files.exists(path)) {
+                Path parent = path.getParent();
+                if (parent != null) Files.createDirectories(parent);
+                Files.createFile(path);
+                return new HeapPage(pageId);
             }
 
-            byte[] arr = buf.array();
-            return new HeapPage(pageId, arr);
+            try (FileChannel ch = FileChannel.open(path, StandardOpenOption.READ)) {
+                long pos = (long) pageId * PAGE_SIZE;
+                if (pos + PAGE_SIZE > ch.size()) {
+                    return new HeapPage(pageId);
+                }
+
+                ByteBuffer buf = ByteBuffer.allocate(PAGE_SIZE);
+                int total = 0;
+                while (total < PAGE_SIZE) {
+                    int n = ch.read(buf, pos + total);
+                    if (n < 0) return new HeapPage(pageId);
+                    total += n;
+                }
+                return new HeapPage(pageId, buf.array());
+            }
         } catch (IOException e) {
             throw new IllegalStateException("I/O error while reading page", e);
         }

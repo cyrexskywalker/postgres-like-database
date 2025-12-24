@@ -44,6 +44,16 @@ public class DefaultLexer implements Lexer {
                     case "OR"     -> TokenType.OR;
                     case "NOT"    -> TokenType.NOT;
                     case "AS"     -> TokenType.AS;
+
+                    case "CREATE" -> TokenType.CREATE;
+                    case "TABLE"  -> TokenType.TABLE;
+                    case "INSERT" -> TokenType.INSERT;
+                    case "INTO"   -> TokenType.INTO;
+                    case "VALUES" -> TokenType.VALUES;
+
+                    case "INDEX"  -> TokenType.INDEX;
+                    case "ON"     -> TokenType.ON;
+
                     default       -> TokenType.IDENT;
                 };
                 tokens.add(new Token(lexeme, start, type));

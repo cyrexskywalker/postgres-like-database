@@ -14,7 +14,11 @@ public interface CatalogManager {
 
     ColumnDefinition getColumn(TableDefinition table, String columnName);
 
+    List<ColumnDefinition> listColumnsSorted(TableDefinition table);
+
     List<TableDefinition> listTables();
 
     TypeDefinition getTypeByName(String resultType);
+
+    TypeDefinition getTypeByOid(int typeOid);
 }

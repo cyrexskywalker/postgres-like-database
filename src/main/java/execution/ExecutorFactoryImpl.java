@@ -4,6 +4,8 @@ import catalog.manager.CatalogManager;
 import catalog.operation.OperationManager;
 import execution.executors.*;
 import optimizer.node.*;
+import optimizer.node.PhysicalIndexScanNode;
+import execution.executors.BTreeIndexScanExecutor;
 
 public class ExecutorFactoryImpl implements ExecutorFactory {
 
@@ -30,6 +32,14 @@ public class ExecutorFactoryImpl implements ExecutorFactory {
                     n.getColumns()
             );
         }
+        if (plan instanceof PhysicalCreateIndexNode n) {
+            return new CreateIndexExecutor(
+                    operationManager,
+                    n.indexName(),
+                    n.tableName(),
+                    n.columnName()
+            );
+        }
         if (plan instanceof PhysicalFilterNode n) {
             Executor child = createExecutor(n.getInput());
             return new FilterExecutor(child, n.getPredicate());
@@ -37,6 +47,17 @@ public class ExecutorFactoryImpl implements ExecutorFactory {
         if (plan instanceof PhysicalProjectNode n) {
             Executor child = createExecutor(n.getInput());
             return new ProjectExecutor(child, n.getTargets());
+        }
+        if (plan instanceof PhysicalIndexScanNode n) {
+            return new BTreeIndexScanExecutor(
+                    operationManager,
+                    n.getTable().getName(),
+                    n.getIndex(),
+                    n.getFrom(),
+                    n.getTo(),
+                    n.isIncludeFrom(),
+                    n.isIncludeTo()
+            );
         }
         throw new UnsupportedOperationException("Unsupported physical plan node: " + plan.getClass().getSimpleName());
     }

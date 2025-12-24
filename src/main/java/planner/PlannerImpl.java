@@ -1,6 +1,5 @@
 package planner;
 
-import ast.QueryType;
 import catalog.manager.CatalogManager;
 import catalog.model.ColumnDefinition;
 import catalog.model.TableDefinition;
@@ -25,28 +24,24 @@ public class PlannerImpl implements Planner {
             throw new IllegalArgumentException("QueryTree is null");
         }
 
-        if (queryTree.commandType == null) {
-            throw new IllegalArgumentException("QueryType is not set in QueryTree");
+        if (queryTree.kind == null) {
+            throw new IllegalArgumentException("Kind is not set in QueryTree");
         }
 
-        return switch (queryTree.commandType) {
+        return switch (queryTree.kind) {
             case SELECT -> planSelect(queryTree);
-            case CREATE -> planCreate(queryTree);
+            case CREATE_TABLE, CREATE -> planCreateTable(queryTree);
+            case CREATE_INDEX -> planCreateIndex(queryTree);
             case INSERT -> planInsert(queryTree);
         };
     }
 
-    // ================= SELECT =================
-
     private LogicalPlanNode planSelect(QueryTree q) {
-        if (q.fromTables.isEmpty()) {
+        if (q.fromTables == null || q.fromTables.isEmpty()) {
             throw new IllegalArgumentException("SELECT requires FROM");
         }
-
         if (q.fromTables.size() != 1) {
-            throw new UnsupportedOperationException(
-                    "Only single-table SELECT is supported"
-            );
+            throw new UnsupportedOperationException("Only single-table SELECT is supported");
         }
 
         TableDefinition table = q.fromTables.get(0);
@@ -58,18 +53,40 @@ public class PlannerImpl implements Planner {
             upper = new FilterNode(upper, q.filter);
         }
 
-        return new ProjectNode(upper, q.targetList);
+        List<QueryTree.QTExpr> targets = expandStarTargets(q.targetList, table);
+
+        return new ProjectNode(upper, targets);
     }
 
-    // ================= CREATE TABLE =================
+    private List<QueryTree.QTExpr> expandStarTargets(List<QueryTree.QTExpr> input, TableDefinition table) {
+        boolean hasStar = input.stream().anyMatch(e -> e instanceof QueryTree.QTStar);
+        if (!hasStar) return input;
 
-    private LogicalPlanNode planCreate(QueryTree q) {
-        if (q.targetList.isEmpty()) {
+        List<ColumnDefinition> cols = catalogManager.listColumnsSorted(table);
+
+        List<QueryTree.QTExpr> out = new ArrayList<>();
+        for (QueryTree.QTExpr e : input) {
+            if (e instanceof QueryTree.QTStar) {
+                for (ColumnDefinition col : cols) {
+                    TypeDefinition t = catalogManager.getTypeByOid(col.typeOid());
+                    String typeName = (t == null) ? "UNKNOWN" : t.name();
+                    out.add(new QueryTree.QTColumn(col, table, typeName));
+                }
+            } else {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    private LogicalPlanNode planCreateTable(QueryTree q) {
+        if (q.fromTables == null || q.fromTables.size() != 1) {
+            throw new IllegalArgumentException("CREATE TABLE requires exactly one target table");
+        }
+        if (q.targetList == null || q.targetList.isEmpty()) {
             throw new IllegalArgumentException("CREATE TABLE requires column definitions");
         }
 
-        // имя таблицы уже известно на этапе semantic analyzer
-        // обычно semantic analyzer кладёт TableDefinition-заглушку
         TableDefinition proto = q.fromTables.get(0);
 
         List<ColumnDefinition> columns = new ArrayList<>();
@@ -77,16 +94,17 @@ public class PlannerImpl implements Planner {
 
         for (QueryTree.QTExpr expr : q.targetList) {
             if (!(expr instanceof QueryTree.QTColumn col)) {
-                throw new IllegalArgumentException(
-                        "CREATE TABLE expects column definitions"
-                );
+                throw new IllegalArgumentException("CREATE TABLE expects column definitions");
             }
 
             TypeDefinition type = catalogManager.getTypeByName(col.type);
+            if (type == null) {
+                throw new IllegalArgumentException("Unknown type: " + col.type);
+            }
 
             columns.add(new ColumnDefinition(
-                    0,                  // oid будет назначен каталогом
-                    0,                  // tableOid будет назначен каталогом
+                    0,
+                    0,
                     type.getOid(),
                     col.column.name(),
                     position++
@@ -106,16 +124,29 @@ public class PlannerImpl implements Planner {
         return new CreateTableNode(tableDef);
     }
 
-    // ================= INSERT =================
+    private LogicalPlanNode planCreateIndex(QueryTree q) {
+        if (q.indexName == null || q.indexName.isBlank()) {
+            throw new IllegalArgumentException("CREATE INDEX: empty index name");
+        }
+        if (q.indexTableName == null || q.indexTableName.isBlank()) {
+            throw new IllegalArgumentException("CREATE INDEX: empty table name");
+        }
+        if (q.indexColumnName == null || q.indexColumnName.isBlank()) {
+            throw new IllegalArgumentException("CREATE INDEX: empty column name");
+        }
+
+        return new LogicalCreateIndexNode(q.indexName, q.indexTableName, q.indexColumnName);
+    }
 
     private LogicalPlanNode planInsert(QueryTree q) {
-        if (q.fromTables.size() != 1) {
+        if (q.fromTables == null || q.fromTables.size() != 1) {
             throw new IllegalArgumentException("INSERT requires exactly one target table");
         }
 
         TableDefinition table = q.fromTables.get(0);
 
         List<QueryTree.QTExpr> values = q.targetList;
+        if (values == null) values = List.of();
 
         return new InsertNode(table, values);
     }

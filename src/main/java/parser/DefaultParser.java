@@ -19,7 +19,17 @@ public class DefaultParser implements Parser {
         this.tokens = tokens;
         this.pos = 0;
 
-        SelectStmt select = parseSelect();
+        AstNode stmt;
+        if (check(TokenType.SELECT)) {
+            stmt = parseSelect();
+        } else if (check(TokenType.CREATE)) {
+            stmt = parseCreate();
+        } else if (check(TokenType.INSERT)) {
+            stmt = parseInsert();
+        } else {
+            Token t = peek();
+            throw new IllegalArgumentException("expected statement, got: " + t.getType() + " at pos " + t.getPosition());
+        }
 
         if (check(TokenType.SEMICOLON)) advance();
         if (check(TokenType.EOF)) advance();
@@ -28,7 +38,73 @@ public class DefaultParser implements Parser {
             Token t = peek();
             throw new IllegalArgumentException("expected end of input, got: " + t.getType() + " at pos " + t.getPosition());
         }
-        return select;
+        return stmt;
+    }
+
+    private AstNode parseCreate() {
+        expect(TokenType.CREATE, "expected CREATE");
+
+        if (match(TokenType.TABLE)) {
+            String tableName = expect(TokenType.IDENT, "expected table name").getLexeme();
+
+            expect(TokenType.LPAREN, "expected '(' after table name");
+            List<ColumnDef> cols = parseColumnDefList();
+            expect(TokenType.RPAREN, "expected ')'");
+
+            return new CreateTableStmt(tableName, cols);
+        }
+
+        if (match(TokenType.INDEX)) {
+            return parseCreateIndexAfterCreate();
+        }
+
+        throw new IllegalArgumentException("expected TABLE or INDEX, got: " + peek().getType() + " at pos " + peek().getPosition());
+    }
+
+    private AstNode parseCreateIndexAfterCreate() {
+        String indexName = expect(TokenType.IDENT, "expected index name").getLexeme();
+        expect(TokenType.ON, "expected ON");
+
+        String tableName = expect(TokenType.IDENT, "expected table name").getLexeme();
+
+        expect(TokenType.LPAREN, "expected '(' after table name");
+        String columnName = expect(TokenType.IDENT, "expected column name").getLexeme();
+        expect(TokenType.RPAREN, "expected ')'");
+
+        return new CreateIndexStmt(indexName, tableName, columnName);
+    }
+
+    private List<ColumnDef> parseColumnDefList() {
+        List<ColumnDef> list = new ArrayList<>();
+        do { list.add(parseColumnDef()); } while (match(TokenType.COMMA));
+        return list;
+    }
+
+    private ColumnDef parseColumnDef() {
+        String colName = expect(TokenType.IDENT, "expected column name").getLexeme();
+        String typeName = expect(TokenType.IDENT, "expected type name").getLexeme();
+        return new ColumnDef(colName, typeName);
+    }
+
+    private AstNode parseInsert() {
+        expect(TokenType.INSERT, "expected INSERT");
+        expect(TokenType.INTO, "expected INTO");
+
+        String tableName = expect(TokenType.IDENT, "expected table name").getLexeme();
+
+        expect(TokenType.VALUES, "expected VALUES");
+        expect(TokenType.LPAREN, "expected '(' after VALUES");
+
+        List<Expr> values = parseExprList();
+        expect(TokenType.RPAREN, "expected ')'");
+
+        return new InsertStmt(tableName, values);
+    }
+
+    private List<Expr> parseExprList() {
+        List<Expr> list = new ArrayList<>();
+        do { list.add(parseExpr()); } while (match(TokenType.COMMA));
+        return list;
     }
 
     public SelectStmt parseSelect() {
@@ -89,7 +165,6 @@ public class DefaultParser implements Parser {
         return null;
     }
 
-    // OR -> AND -> NOT -> comparison -> add/sub -> mul/div -> primary
     private Expr parseExpr() { return parseOr(); }
 
     private Expr parseOr() {

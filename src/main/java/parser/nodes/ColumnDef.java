@@ -1,0 +1,16 @@
+package parser.nodes;
+
+public class ColumnDef extends AstNode {
+    public final String name;
+    public final String typeName;
+
+    public ColumnDef(String name, String typeName) {
+        this.name = name;
+        this.typeName = typeName;
+    }
+
+    @Override
+    public String toString() {
+        return "ColumnDef(" + name + " " + typeName + ")";
+    }
+}

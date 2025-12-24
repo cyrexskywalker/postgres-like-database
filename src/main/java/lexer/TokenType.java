@@ -1,7 +1,7 @@
 package lexer;
 
 public enum TokenType {
-    //ключевые слова
+    // ключевые слова
     SELECT,
     FROM,
     WHERE,
@@ -10,32 +10,40 @@ public enum TokenType {
     NOT,
     AS,
 
-    //идентификаторы/имена
+    CREATE,
+    TABLE,
+    INSERT,
+    INTO,
+    VALUES,
+    INDEX,
+    ON,
+
+    // идентификаторы/имена
     IDENT,
 
-    //литералы
+    // литералы
     NUMBER,
     STRING,
 
-    //операторы
-    EQ,             //  =
-    NE,             //  <>, !=
-    LT,             //  <
-    LE,             //  <=
-    GT,             //  >
-    GE,             //  >=
-    PLUS,           //  +
-    MINUS,          //  -
-    STAR,           //  *
-    SLASH,          //  /
+    // операторы
+    EQ,
+    NE,
+    LT,
+    LE,
+    GT,
+    GE,
+    PLUS,
+    MINUS,
+    STAR,
+    SLASH,
 
-    //разделители
+    // разделители
     COMMA,
     DOT,
-    LPAREN,    // левая скобочка :(
-    RPAREN,    // правая скобочка :)
+    LPAREN,
+    RPAREN,
     SEMICOLON,
 
-    //специальные
+    // специальные
     EOF
 }

@@ -135,6 +135,7 @@ public class DefaultCatalogManager implements CatalogManager, DefaultOperationMa
         return out;
     }
 
+
     @Override
     public synchronized TypeDefinition getTypeByName(String resultType) {
         if (resultType == null || resultType.isBlank()) {
@@ -162,9 +163,11 @@ public class DefaultCatalogManager implements CatalogManager, DefaultOperationMa
 
         typesByOid.put(int64.getOid(), int64);
         typesByName.put(int64.name(), int64);
+        typesByName.put("INT", int64);              // алиас (если вдруг где-то отдаётся INT)
 
         typesByOid.put(varchar255.getOid(), varchar255);
         typesByName.put(varchar255.name(), varchar255);
+        typesByName.put("VARCHAR", varchar255);     // алиас под семантику/SQL
     }
 
     private void persistBuiltinTypes() throws IOException {
@@ -308,10 +311,12 @@ public class DefaultCatalogManager implements CatalogManager, DefaultOperationMa
     }
 
     @Override
-    public List<ColumnDefinition> listColumnsSorted(TableDefinition table) {
-        List<ColumnDefinition> cols =
-                columnsByTableOid.getOrDefault(table.getOid(), List.of());
-        return cols;
+    public synchronized List<ColumnDefinition> listColumnsSorted(TableDefinition table) {
+        List<ColumnDefinition> cols = columnsByTableOid.getOrDefault(table.getOid(), List.of());
+        if (cols.isEmpty()) return List.of();
+        List<ColumnDefinition> copy = new ArrayList<>(cols);
+        copy.sort(Comparator.comparingInt(ColumnDefinition::position));
+        return copy;
     }
 
     @Override

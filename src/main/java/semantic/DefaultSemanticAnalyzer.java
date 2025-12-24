@@ -11,24 +11,112 @@ public class DefaultSemanticAnalyzer implements SemanticAnalyzer {
 
     @Override
     public QueryTree analyze(AstNode ast, CatalogManager catalog) {
-        if (!(ast instanceof SelectStmt select)) {
-            throw new SemanticException("Only SELECT is supported in this analyzer");
-        }
-        FromContext fromCtx = resolveFrom(select, catalog);
-        List<QueryTree.QTExpr> targets = new ArrayList<>();
-        for (ResTarget rt : select.targetList) {
-            Expr val = rt.val;
-            QueryTree.QTExpr qexpr = resolveExpr(val, fromCtx, catalog);
-            targets.add(qexpr);
-        }
-        QueryTree.QTExpr filter = null;
-        if (select.whereClause != null) {
-            filter = resolveExpr(select.whereClause, fromCtx, catalog);
-            if (!isBooleanLike(filter)) {
-                throw new SemanticException("WHERE clause is not boolean");
+        if (ast instanceof SelectStmt select) {
+            FromContext fromCtx = resolveFrom(select, catalog);
+
+            List<QueryTree.QTExpr> targets = new ArrayList<>();
+            for (ResTarget rt : select.targetList) {
+                targets.add(resolveExpr(rt.val, fromCtx, catalog));
             }
+
+            QueryTree.QTExpr filter = null;
+            if (select.whereClause != null) {
+                filter = resolveExpr(select.whereClause, fromCtx, catalog);
+                if (!isBooleanLike(filter)) {
+                    throw new SemanticException("WHERE clause is not boolean");
+                }
+            }
+
+            return QueryTree.select(fromCtx.tables, targets, filter);
         }
-        return new QueryTree(fromCtx.tables, targets, filter);
+
+        if (ast instanceof CreateTableStmt ct) {
+            if (ct.tableName == null || ct.tableName.isBlank()) {
+                throw new SemanticException("CREATE TABLE: empty table name");
+            }
+            if (ct.columns == null || ct.columns.isEmpty()) {
+                throw new SemanticException("CREATE TABLE requires columns");
+            }
+
+            var proto = new catalog.model.TableDefinition(
+                    0,
+                    ct.tableName,
+                    "USER",
+                    ct.tableName,
+                    0
+            );
+
+            List<QueryTree.QTExpr> cols = new ArrayList<>();
+            for (ColumnDef c : ct.columns) {
+                if (c.name == null || c.name.isBlank()) {
+                    throw new SemanticException("CREATE TABLE: empty column name");
+                }
+                if (c.typeName == null || c.typeName.isBlank()) {
+                    throw new SemanticException("CREATE TABLE: empty type for column " + c.name);
+                }
+
+                var type = catalog.getTypeByName(c.typeName);
+                if (type == null) {
+                    throw new SemanticException("Unknown type: " + c.typeName);
+                }
+
+                var cd = new catalog.model.ColumnDefinition(
+                        0,
+                        0,
+                        type.getOid(),
+                        c.name,
+                        0
+                );
+
+                cols.add(new QueryTree.QTColumn(cd, proto, mapTypeName(catalog, cd.typeOid())));
+            }
+
+            return QueryTree.create(List.of(proto), cols);
+        }
+
+        if (ast instanceof InsertStmt ins) {
+            if (ins.tableName == null || ins.tableName.isBlank()) {
+                throw new SemanticException("INSERT: empty table name");
+            }
+            var td = catalog.getTable(ins.tableName);
+            if (td == null) {
+                throw new SemanticException("Unknown table: " + ins.tableName);
+            }
+            if (ins.values == null || ins.values.isEmpty()) {
+                throw new SemanticException("INSERT requires VALUES");
+            }
+
+            List<QueryTree.QTExpr> values = new ArrayList<>();
+            for (Expr e : ins.values) {
+                QueryTree.QTExpr q = resolveExpr(e, new FromContext(Map.of(td.getName(), td), List.of(td)), catalog);
+                values.add(q);
+            }
+
+            return QueryTree.insert(List.of(td), values);
+        }
+
+        if (ast instanceof CreateIndexStmt ci) {
+            if (ci.indexName == null || ci.indexName.isBlank()) {
+                throw new SemanticException("CREATE INDEX: empty index name");
+            }
+            if (ci.tableName == null || ci.tableName.isBlank()) {
+                throw new SemanticException("CREATE INDEX: empty table name");
+            }
+            if (ci.columnName == null || ci.columnName.isBlank()) {
+                throw new SemanticException("CREATE INDEX: empty column name");
+            }
+
+            TableDefinition td = catalog.getTable(ci.tableName);
+            if (td == null) {
+                throw new SemanticException("Unknown table: " + ci.tableName);
+            }
+
+            ColumnDefinition cd = findColumnInTable(catalog, td, ci.columnName);
+
+            return QueryTree.createIndex(ci.indexName, td, cd);
+        }
+
+        throw new SemanticException("unsupported statement: " + ast.getClass().getSimpleName());
     }
 
     private FromContext resolveFrom(SelectStmt select, CatalogManager catalog) {
@@ -107,17 +195,32 @@ public class DefaultSemanticAnalyzer implements SemanticAnalyzer {
     private QueryTree.QTExpr resolveColumnRef(ColumnRef cr, FromContext fromCtx, CatalogManager catalog) {
         String tableAlias = cr.table;
         String colName = cr.column;
+
         if (colName == null || colName.isBlank()) {
-            throw new SemanticException("empty column getName");
+            throw new SemanticException("empty column name");
         }
+
+        if ("*".equals(colName)) {
+            if (tableAlias != null && !tableAlias.isBlank()) {
+                TableDefinition td = fromCtx.aliasToTable.get(tableAlias);
+                if (td == null) throw new SemanticException("unknown table alias: " + tableAlias);
+                return new QueryTree.QTStar(td);
+            }
+            if (fromCtx.tables.size() == 1) {
+                return new QueryTree.QTStar(fromCtx.tables.get(0));
+            }
+            throw new SemanticException("ambiguous * (use t.*)");
+        }
+
         if (tableAlias != null && !tableAlias.isBlank()) {
             TableDefinition td = fromCtx.aliasToTable.get(tableAlias);
             if (td == null) {
                 throw new SemanticException("unknown table alias: " + tableAlias);
             }
             ColumnDefinition cd = findColumnInTable(catalog, td, colName);
-            return new QueryTree.QTColumn(cd, td, mapTypeName(cd.typeOid()));
+            return new QueryTree.QTColumn(cd, td, mapTypeName(catalog, cd.typeOid()));
         }
+
         QueryTree.QTColumn found = null;
         for (var entry : fromCtx.aliasToTable.entrySet()) {
             TableDefinition td = entry.getValue();
@@ -126,7 +229,7 @@ public class DefaultSemanticAnalyzer implements SemanticAnalyzer {
                 if (found != null) {
                     throw new SemanticException("ambiguous column reference: " + colName);
                 }
-                found = new QueryTree.QTColumn(cd, td, mapTypeName(cd.typeOid()));
+                found = new QueryTree.QTColumn(cd, td, mapTypeName(catalog, cd.typeOid()));
             }
         }
         if (found == null) {
@@ -160,12 +263,13 @@ public class DefaultSemanticAnalyzer implements SemanticAnalyzer {
         return new QueryTree.QTConst(String.valueOf(v), "UNKNOWN");
     }
 
-    private String mapTypeName(int typeOid) {
-        return switch (typeOid) {
-            case 1 -> "INT64";
-            case 2 -> "VARCHAR";
-            default -> "UNKNOWN";
-        };
+    private String mapTypeName(CatalogManager catalog, int typeOid) {
+        var t = catalog.getTypeByOid(typeOid);
+        if (t == null) return "UNKNOWN";
+        String n = t.name();
+        if (n == null) return "UNKNOWN";
+        if (n.toUpperCase(Locale.ROOT).startsWith("VARCHAR")) return "VARCHAR";
+        return n.toUpperCase(Locale.ROOT);
     }
 
     private void checkBinaryOpTypes(String op, QueryTree.QTExpr left, QueryTree.QTExpr right) {

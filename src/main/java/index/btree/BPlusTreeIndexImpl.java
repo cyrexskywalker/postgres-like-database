@@ -9,20 +9,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Реализация B+-Tree индекса.
- * <p>
- * Порядок M (branching factor): выбирается в зависимости от размера страницы.
- * Для страницы 8KB и ключей long (8 байт) + указателей (4 байта):
- * M ≈ (8192 - 100) / (8 + 4) ≈ 750
- * На практике: M = 250-400 для баланса между высотой и поиском
- * <p>
- * Инварианты:
- * - Все листья находятся на одном уровне (одинаковая высота)
- * - Все ключи в узле упорядочены
- * - Для internal узла: keys[i-1] <= pointers[i] < keys[i]
- * - Листья связаны двусвязным списком
- */
 public class BPlusTreeIndexImpl implements BPlusTreeIndex {
 
     private final String indexName;
@@ -36,8 +22,7 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
     private final Map<Integer, BPlusTreeNode> nodes = new HashMap<>();
     private int nextPageId = 0;
 
-    public BPlusTreeIndexImpl(String indexName, String columnName,
-                              int order, PageFileManager pageManager) {
+    public BPlusTreeIndexImpl(String indexName, String columnName, int order, PageFileManager pageManager) {
         this.indexName = indexName;
         this.columnName = columnName;
         this.order = order;
@@ -55,10 +40,8 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
         height = 1;
     }
 
-    // ================= INSERT =================
-
     @Override
-    public void insert(Comparable<?> key, TID tid) {
+    public void insert(Comparable key, TID tid) {
         if (key == null) throw new IllegalArgumentException("key is null");
         if (tid == null) throw new IllegalArgumentException("tid is null");
 
@@ -70,9 +53,9 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
         }
     }
 
-    private void insertIntoLeaf(BPlusTreeNode leaf, Comparable<?> key, TID tid) {
+    private void insertIntoLeaf(BPlusTreeNode leaf, Comparable key, TID tid) {
         int i = 0;
-        while (i < leaf.numKeys && compare(leaf.keys[i], key) < 0) {
+        while (i < leaf.numKeys && cmp(leaf.keys[i], key) < 0) {
             i++;
         }
 
@@ -86,17 +69,15 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
         leaf.numKeys++;
     }
 
-    // ================= SEARCH =================
-
     @Override
-    public List<TID> search(Comparable<?> key) {
+    public List<TID> search(Comparable key) {
         if (key == null) throw new IllegalArgumentException("key is null");
 
         List<TID> result = new ArrayList<>();
         BPlusTreeNode leaf = findLeaf(key);
 
         for (int i = 0; i < leaf.numKeys; i++) {
-            if (compare(leaf.keys[i], key) == 0) {
+            if (cmp(leaf.keys[i], key) == 0) {
                 result.add((TID) leaf.pointers[i]);
             }
         }
@@ -104,10 +85,10 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
     }
 
     @Override
-    public List<TID> rangeSearch(Comparable<?> from, Comparable<?> to, boolean inclusive) {
+    public List<TID> rangeSearch(Comparable from, Comparable to, boolean inclusive) {
         List<TID> result = new ArrayList<>();
 
-        if (from != null && to != null && compare(from, to) > 0) {
+        if (from != null && to != null && cmp(from, to) > 0) {
             return result;
         }
 
@@ -115,17 +96,17 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
 
         while (node != null) {
             for (int i = 0; i < node.numKeys; i++) {
-                Comparable<?> k = node.keys[i];
+                Comparable k = node.keys[i];
 
                 if (from != null) {
-                    int cFrom = compare(k, from);
+                    int cFrom = cmp(k, from);
                     if (cFrom < 0 || (!inclusive && cFrom == 0)) {
                         continue;
                     }
                 }
 
                 if (to != null) {
-                    int cTo = compare(k, to);
+                    int cTo = cmp(k, to);
                     if (cTo > 0 || (!inclusive && cTo == 0)) {
                         return result;
                     }
@@ -140,7 +121,7 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
     }
 
     @Override
-    public List<TID> searchGreaterThan(Comparable<?> value, boolean inclusive) {
+    public List<TID> searchGreaterThan(Comparable value, boolean inclusive) {
         if (value == null) throw new IllegalArgumentException("value is null");
 
         List<TID> result = new ArrayList<>();
@@ -148,10 +129,10 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
 
         while (node != null) {
             for (int i = 0; i < node.numKeys; i++) {
-                Comparable<?> k = node.keys[i];
-                int cmp = compare(k, value);
+                Comparable k = node.keys[i];
+                int c = cmp(k, value);
 
-                if (cmp > 0 || (inclusive && cmp == 0)) {
+                if (c > 0 || (inclusive && c == 0)) {
                     result.add((TID) node.pointers[i]);
                 }
             }
@@ -162,7 +143,7 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
     }
 
     @Override
-    public List<TID> searchLessThan(Comparable<?> value, boolean inclusive) {
+    public List<TID> searchLessThan(Comparable value, boolean inclusive) {
         if (value == null) throw new IllegalArgumentException("value is null");
 
         List<TID> result = new ArrayList<>();
@@ -170,10 +151,10 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
 
         while (node != null) {
             for (int i = 0; i < node.numKeys; i++) {
-                Comparable<?> k = node.keys[i];
-                int cmp = compare(k, value);
+                Comparable k = node.keys[i];
+                int c = cmp(k, value);
 
-                if (cmp < 0 || (inclusive && cmp == 0)) {
+                if (c < 0 || (inclusive && c == 0)) {
                     result.add((TID) node.pointers[i]);
                 } else {
                     return result;
@@ -200,14 +181,9 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
         return result;
     }
 
-    // ================= SPLIT =================
-
     private void split(BPlusTreeNode node) {
-        if (node.isLeaf) {
-            splitLeaf(node);
-        } else {
-            splitInternal(node);
-        }
+        if (node.isLeaf) splitLeaf(node);
+        else splitInternal(node);
     }
 
     private void splitLeaf(BPlusTreeNode leaf) {
@@ -235,14 +211,12 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
 
         if (right.rightSiblingPageId != -1) {
             BPlusTreeNode oldRight = readNode(right.rightSiblingPageId);
-            if (oldRight != null) {
-                oldRight.leftSiblingPageId = right.pageId;
-            }
+            if (oldRight != null) oldRight.leftSiblingPageId = right.pageId;
         }
 
         nodes.put(right.pageId, right);
 
-        Comparable<?> separator = right.keys[0];
+        Comparable separator = right.keys[0];
 
         if (leaf.parentPageId == -1) {
             BPlusTreeNode root = new BPlusTreeNode();
@@ -272,7 +246,7 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
     private void splitInternal(BPlusTreeNode node) {
         int mid = order;
 
-        Comparable<?> promote = node.keys[mid];
+        Comparable promote = node.keys[mid];
 
         BPlusTreeNode right = new BPlusTreeNode();
         right.pageId = allocatePage();
@@ -299,9 +273,7 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
             Object ptr = right.pointers[i];
             if (ptr instanceof Integer pid) {
                 BPlusTreeNode child = readNode(pid);
-                if (child != null) {
-                    child.parentPageId = right.pageId;
-                }
+                if (child != null) child.parentPageId = right.pageId;
             }
         }
 
@@ -332,9 +304,9 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
         }
     }
 
-    private void insertIntoInternal(BPlusTreeNode parent, Comparable<?> key, int rightPageId) {
+    private void insertIntoInternal(BPlusTreeNode parent, Comparable key, int rightPageId) {
         int i = 0;
-        while (i < parent.numKeys && compare(parent.keys[i], key) < 0) {
+        while (i < parent.numKeys && cmp(parent.keys[i], key) < 0) {
             i++;
         }
 
@@ -350,22 +322,18 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
         parent.numKeys++;
 
         BPlusTreeNode rightChild = readNode(rightPageId);
-        if (rightChild != null) {
-            rightChild.parentPageId = parent.pageId;
-        }
+        if (rightChild != null) rightChild.parentPageId = parent.pageId;
 
         if (parent.numKeys >= 2 * order) {
             split(parent);
         }
     }
 
-    // ================= UTILS =================
-
-    private BPlusTreeNode findLeaf(Comparable<?> key) {
+    private BPlusTreeNode findLeaf(Comparable key) {
         BPlusTreeNode node = readNode(rootPageId);
         while (!node.isLeaf) {
             int i = 0;
-            while (i < node.numKeys && compare(key, node.keys[i]) >= 0) {
+            while (i < node.numKeys && cmp(key, node.keys[i]) >= 0) {
                 i++;
             }
             node = readNode((int) node.pointers[i]);
@@ -381,13 +349,6 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
         return node;
     }
 
-    private int compare(Comparable<?> a, Comparable<?> b) {
-        if (a == null && b == null) return 0;
-        if (a == null) return -1;
-        if (b == null) return 1;
-        return ((Comparable) a).compareTo(b);
-    }
-
     private int allocatePage() {
         return nextPageId++;
     }
@@ -395,8 +356,6 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
     private BPlusTreeNode readNode(int pageId) {
         return nodes.get(pageId);
     }
-
-    // ================= META =================
 
     @Override
     public String getName() {
@@ -423,14 +382,20 @@ public class BPlusTreeIndexImpl implements BPlusTreeIndex {
         return order;
     }
 
-    // ================= NODE =================
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    private static int cmp(Comparable a, Comparable b) {
+        if (a == null && b == null) return 0;
+        if (a == null) return -1;
+        if (b == null) return 1;
+        return a.compareTo(b);
+    }
 
     private static class BPlusTreeNode {
         int pageId;
         int parentPageId = -1;
         boolean isLeaf;
         int numKeys;
-        Comparable<?>[] keys;
+        Comparable[] keys;
         Object[] pointers;
         int leftSiblingPageId = -1;
         int rightSiblingPageId = -1;

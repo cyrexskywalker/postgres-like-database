@@ -5,7 +5,10 @@ import catalog.model.ColumnDefinition;
 import catalog.model.TableDefinition;
 import catalog.model.TypeDefinition;
 import index.TID;
+import index.btree.BPlusTreeIndex;
+import index.btree.BPlusTreeIndexImpl;
 import memory.buffer.BufferPoolManager;
+import memory.manager.PageFileManager;
 import memory.model.BufferSlot;
 import memory.page.HeapPage;
 import memory.page.Page;
@@ -18,11 +21,16 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import index.registry.IndexRegistry;
+
+
 public class DefaultOperationManager implements OperationManager {
 
     public interface CatalogAccess {
         List<ColumnDefinition> listColumnsSorted(TableDefinition table);
+
         TypeDefinition getTypeByOid(int typeOid);
+
         void updatePagesCount(int tableOid, int newPagesCount);
     }
 
@@ -30,30 +38,34 @@ public class DefaultOperationManager implements OperationManager {
     private final CatalogAccess catalogAccess;
     private final BufferPoolManager bpm;
     private final Path dataRoot;
+    private final IndexRegistry indexRegistry;
+
+    private final PageFileManager pageManagerForIndexes;
 
     public DefaultOperationManager(CatalogManager catalog,
                                    CatalogAccess catalogAccess,
                                    BufferPoolManager bpm,
-                                   Path dataRoot) {
+                                   Path dataRoot,
+                                   IndexRegistry indexRegistry,
+                                   PageFileManager pageManagerForIndexes) {
         this.catalog = Objects.requireNonNull(catalog, "catalog");
         this.catalogAccess = Objects.requireNonNull(catalogAccess, "catalogAccess");
         this.bpm = Objects.requireNonNull(bpm, "bpm");
         this.dataRoot = Objects.requireNonNull(dataRoot, "dataRoot");
+        this.indexRegistry = indexRegistry;
+        this.pageManagerForIndexes = pageManagerForIndexes;
     }
 
     @Override
-    public void insert(String tableName, List<Object> values) {
+    public TID insert(String tableName, List<Object> values) {
         TableDefinition td = requireTable(tableName);
 
         List<ColumnDefinition> cols = catalogAccess.listColumnsSorted(td);
         if (values == null || values.size() != cols.size()) {
-            throw new IllegalArgumentException(
-                    "values size mismatch: expected " + cols.size()
-            );
+            throw new IllegalArgumentException("values size mismatch: expected " + cols.size());
         }
 
         byte[] tuple = serializeRow(cols, values);
-
         ensureDir(dataRoot);
 
         int pages = td.pagesCount();
@@ -63,21 +75,34 @@ public class DefaultOperationManager implements OperationManager {
             Page p = slot.getPage();
 
             try {
+                int slotId = p.size();
                 p.write(tuple);
                 bpm.updatePage(pid, p);
                 bpm.flushPage(pid);
-                return;
+
+                TID tid = new TID(pid, slotId);
+                if (indexRegistry != null) {
+                    indexRegistry.onInsert(tableName, cols, values, tid);
+                }
+                return tid;
             } catch (IllegalArgumentException ignored) {
             }
         }
 
         HeapPage np = new HeapPage(pages);
+        int slotId = np.size();
         np.write(tuple);
 
         bpm.updatePage(pages, np);
         bpm.flushPage(pages);
 
         catalogAccess.updatePagesCount(td.getOid(), pages + 1);
+
+        TID tid = new TID(pages, slotId);
+        if (indexRegistry != null) {
+            indexRegistry.onInsert(tableName, cols, values, tid);
+        }
+        return tid;
     }
 
     @Override
@@ -138,6 +163,23 @@ public class DefaultOperationManager implements OperationManager {
 
         byte[] tuple = p.read(slotId);
         return deserializeRowToMap(allCols, tuple);
+    }
+
+    @Override
+    public void createIndex(String indexName, String tableName, String columnName) {
+        var table = catalog.getTable(tableName);
+        var col = catalog.getColumn(table, columnName);
+
+        int order = 16;
+
+        BPlusTreeIndex index = new BPlusTreeIndexImpl(
+                indexName,
+                col.name(),
+                order,
+                pageManagerForIndexes
+        );
+
+        indexRegistry.register(table.getName(), col.name(), index);
     }
 
     private TableDefinition requireTable(String name) {

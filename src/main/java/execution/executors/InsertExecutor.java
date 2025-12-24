@@ -6,15 +6,13 @@ import semantic.QueryTree;
 
 import java.util.List;
 
-/**
- * Исполнитель INSERT INTO table VALUES (...).
- * Работает с SEMANTIC QueryTree, а не с AST.
- */
 public class InsertExecutor implements Executor {
 
     private final OperationManager operationManager;
     private final TableDefinition tableDefinition;
     private final List<QueryTree.QTExpr> values;
+
+    private boolean done;
 
     public InsertExecutor(OperationManager operationManager,
                           TableDefinition tableDefinition,
@@ -25,27 +23,24 @@ public class InsertExecutor implements Executor {
     }
 
     @Override
-    public void open() { }
+    public void open() {
+        done = false;
+    }
 
     @Override
     public Object next() {
-        List<Object> rowValues = values.stream()
-                .map(this::evalValue)
-                .toList();
+        if (done) return null;
+        done = true;
 
-        operationManager.insert(tableDefinition.getName(), rowValues);
-        return null;
+        List<Object> rowValues = values.stream().map(this::evalValue).toList();
+        return operationManager.insert(tableDefinition.getName(), rowValues);
     }
 
     @Override
     public void close() { }
 
     private Object evalValue(QueryTree.QTExpr expr) {
-        if (expr instanceof QueryTree.QTConst c) {
-            return c.value;
-        }
-        throw new IllegalStateException(
-                "INSERT supports only constant values, got: " + expr
-        );
+        if (expr instanceof QueryTree.QTConst c) return c.value;
+        throw new IllegalStateException("INSERT supports only constants, got: " + expr);
     }
 }

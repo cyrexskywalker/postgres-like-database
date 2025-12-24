@@ -190,7 +190,7 @@ public class OptimizerImpl implements Optimizer {
             includeTo = true;
 
             int rows = estimateRows(table);
-            sel = 1.0 / rows; // Вариант B: "одна строка из N"
+            sel = 1.0 / rows;
 
         } else if (">".equals(op)) {
             from = cmp;
